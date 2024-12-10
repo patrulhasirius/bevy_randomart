@@ -56,7 +56,7 @@ jobs:
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
-          components: clippy
+          components: clippy, rustc-codegen-cranelift-preview
       - name: Install Dependencies
         run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev lld clang
       - name: Run clippy
@@ -73,6 +73,6 @@ jobs:
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
-          components: rustfmt
+          components: rustfmt, rustc-codegen-cranelift-preview
       - name: Run cargo fmt
         run: cargo fmt --all -- --check
