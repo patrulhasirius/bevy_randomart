@@ -16,7 +16,7 @@ opt-level = 1
 opt-level = 3
 
 [dependencies]
-bevy = "0.15"
+bevy = { version = "0.15", features = ["dynamic_linking", "wayland"] }
 
 # Enable more optimization in the release profile at the cost of compile time.
 [profile.release]
