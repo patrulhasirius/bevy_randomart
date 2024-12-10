@@ -16,8 +16,10 @@ opt-level = 1
 opt-level = 3
 
 [dependencies]
-bevy = { version = "0.15", features = ["dynamic_linking", "wayland"] }
+bevy = { version = "0.15", features = ["wayland"] }
 
+[features]
+dev = ["bevy/dynamic_linking"]
 # Enable more optimization in the release profile at the cost of compile time.
 [profile.release]
 # Compile the entire crate as one unit.
