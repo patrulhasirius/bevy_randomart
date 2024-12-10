@@ -81,7 +81,7 @@ jobs:
           components: rustc-codegen-cranelift-preview
       - name: install dependencies
         run: |
-          sudo apt-get update; sudo apt-get install pkg-config libx11-dev libasound2-dev libudev-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev lld clang
+          sudo apt-get update; sudo apt-get install pkg-config libx11-dev libasound2-dev libudev-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev lld clang libwayland-dev libxkbcommon-dev
 
       - name: Build
         run: |
