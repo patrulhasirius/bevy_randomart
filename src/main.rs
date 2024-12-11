@@ -109,14 +109,14 @@ fn draw(
 
     let nanos = time.delta().as_millis();
 
-    for n in 1..(nanos as u64) * NANOS_MULTIPLIER {
+    for n in 0..(nanos as u64) * NANOS_MULTIPLIER {
         if (i + n) <= (image.height() * image.width()).into() {
             // Generate a random color.
             let draw_color = Color::linear_rgba(rng.gen(), rng.gen(), rng.gen(), rng.gen());
 
             let xy = U64Vec2::new(
                 (i + n) % image.width() as u64,
-                (i + n) / image.height() as u64,
+                (i + n) / image.width() as u64,
             );
             let (x, y) = (xy.x, xy.y);
 
@@ -127,9 +127,10 @@ fn draw(
                 ) //.with_alpha(old_color.alpha()))
                 .unwrap();
 
-            pixel_tracker.counter += 1;
+            //info!("pixel count {}", pixel_tracker.counter);
         }
     }
+    pixel_tracker.counter += (nanos as u64) * NANOS_MULTIPLIER;
 }
 
 fn on_resize_system(
