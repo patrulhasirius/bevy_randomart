@@ -15,7 +15,7 @@ use bevy::render::{
 use bevy::window::WindowResized;
 use rand::Rng;
 
-const NANOS_MULTIPLIER: u64 = 10;
+const NANOS_MULTIPLIER: u64 = 100;
 const IMAGE_WIDTH: u32 = 800;
 const IMAGE_HEIGHT: u32 = 600;
 
@@ -50,7 +50,7 @@ fn main() {
         //.insert_resource(Time::<Fixed>::from_hz(44100.0))
         .insert_resource(PixelTracker::ZERO)
         .add_systems(Startup, setup)
-        .add_systems(Update, (on_resize_system, draw))
+        .add_systems(Update, (on_resize_system))
         //.add_systems(FixedUpdate, draw)
         .run();
 }
@@ -59,6 +59,7 @@ fn main() {
 #[derive(Resource)]
 struct MyProcGenImage(Handle<Image>);
 
+/// Generate a black image with the given dimensions
 fn generate_image(width: u32, height: u32) -> Image {
     // create an image that we are going to draw into
     Image::new_fill(
@@ -93,31 +94,16 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.insert_resource(MyProcGenImage(handle));
 }
 
-/// Every fixed update tick, draw one more pixel to make a spiral pattern
-fn draw(
-    my_handle: Res<MyProcGenImage>,
-    mut images: ResMut<Assets<Image>>,
-    // used to keep track of where we are
-    mut pixel_tracker: ResMut<PixelTracker>,
-    time: Res<Time>,
-) {
-    let i = pixel_tracker.counter;
+/// Get a start and end id and randomize the given pixels
+fn random_pixels(start: u64, number: u64, image: &mut Image) {
     let mut rng = rand::thread_rng();
 
-    // Get the image from Bevy's asset storage.
-    let image = images.get_mut(&my_handle.0).expect("Image not found");
-
-    let nanos = time.delta().as_millis();
-
-    for n in 0..(nanos as u64) * NANOS_MULTIPLIER {
-        if (i + n) <= (image.height() * image.width()).into() {
+    for n in start..number {
+        if (n) <= (image.height() * image.width()).into() {
             // Generate a random color.
             let draw_color = Color::linear_rgba(rng.gen(), rng.gen(), rng.gen(), rng.gen());
 
-            let xy = U64Vec2::new(
-                (i + n) % image.width() as u64,
-                (i + n) / image.width() as u64,
-            );
+            let xy = U64Vec2::new((n) % image.width() as u64, (n) / image.width() as u64);
             let (x, y) = (xy.x, xy.y);
 
             // Set the new color, but keep old alpha value from image.
@@ -130,9 +116,29 @@ fn draw(
             //info!("pixel count {}", pixel_tracker.counter);
         }
     }
+}
+
+/// Change some pixels based on amount of milis from last draw
+fn draw(
+    my_handle: Res<MyProcGenImage>,
+    mut images: ResMut<Assets<Image>>,
+    // used to keep track of where we are
+    mut pixel_tracker: ResMut<PixelTracker>,
+    time: Res<Time>,
+) {
+    let i = pixel_tracker.counter;
+
+    // Get the image from Bevy's asset storage.
+    let image = images.get_mut(&my_handle.0).expect("Image not found");
+
+    let nanos = time.delta().as_millis();
+
+    random_pixels(i, nanos as u64 * NANOS_MULTIPLIER, image);
+
     pixel_tracker.counter += (nanos as u64) * NANOS_MULTIPLIER;
 }
 
+/// On screen resize respawn the sprite, redraw the image and reset pixel counter
 fn on_resize_system(
     mut commands: Commands,
     mut resize_reader: EventReader<WindowResized>,
@@ -148,7 +154,12 @@ fn on_resize_system(
         commands.entity(sprite).despawn_recursive();
         commands.remove_resource::<MyProcGenImage>();
 
-        let image = generate_image(e.width as u32, e.height as u32);
+        let mut image = generate_image(e.width as u32, e.height as u32);
+        random_pixels(
+            pixel_tracker.counter,
+            (image.height() * image.width()) as u64,
+            &mut image,
+        );
 
         let handle = images.add(image);
         commands.spawn(Sprite::from_image(handle.clone()));
