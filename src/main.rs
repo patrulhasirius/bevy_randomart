@@ -9,7 +9,6 @@ mod func_gen;
 use bevy::asset::AssetMetaCheck;
 use bevy::color::palettes::css;
 use bevy::core::FrameCount;
-use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::input::common_conditions::input_just_pressed;
 use bevy::prelude::*;
 use bevy::render::{
@@ -41,8 +40,8 @@ fn main() {
                     primary_window: Some(Window {
                         resolution: WindowResolution::new(IMAGE_HEIGHT as f32, IMAGE_WIDTH as f32),
                         canvas: Some("#canvas".into()),
-                        //fit_canvas_to_parent: true,
-                        prevent_default_event_handling: false,
+                        fit_canvas_to_parent: true,
+                        //prevent_default_event_handling: false,
                         visible: false,
 
                         ..default()
