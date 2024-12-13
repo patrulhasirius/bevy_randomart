@@ -8,6 +8,8 @@ mod func_gen;
 
 use bevy::asset::AssetMetaCheck;
 use bevy::color::palettes::css;
+use bevy::core::FrameCount;
+use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::input::common_conditions::input_just_pressed;
 use bevy::prelude::*;
 use bevy::render::{
@@ -38,7 +40,11 @@ fn main() {
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         resolution: WindowResolution::new(IMAGE_HEIGHT as f32, IMAGE_WIDTH as f32),
-                        fit_canvas_to_parent: true,
+                        canvas: Some("#canvas".into()),
+                        //fit_canvas_to_parent: true,
+                        prevent_default_event_handling: false,
+                        visible: false,
+
                         ..default()
                     }),
                     ..default()
@@ -54,6 +60,7 @@ fn main() {
                 .chain()
                 .run_if(input_just_pressed(KeyCode::KeyR)),
         )
+        .add_systems(Update, make_visible)
         //.add_systems(FixedUpdate, draw)
         .run();
 }
@@ -102,6 +109,7 @@ fn render_pixels(image: &mut Image, seed: u64) {
     let g_tree = generate_tree(MAX_DEPTH, &mut rng);
     let b_tree = generate_tree(MAX_DEPTH, &mut rng);
 
+    let mut buffer: Vec<u8> = Vec::with_capacity((image.height() * image.height()) as usize);
     for y in 0..image.height() {
         // 0..height => 0..2 => -1..1
         let ny = (y as f32) / ((image.height() - 1) as f32) * 2. - 1.;
@@ -111,10 +119,27 @@ fn render_pixels(image: &mut Image, seed: u64) {
             let result_g = eval(nx, ny, &g_tree, &mut rng);
             let result_b = eval(nx, ny, &b_tree, &mut rng);
 
-            let color = Color::linear_rgb(result_r, result_g, result_b);
-            image.set_color_at(x, y, color).unwrap();
+            buffer.push((result_r / 2. * 255.) as u8);
+            buffer.push((result_g / 2. * 255.) as u8);
+            buffer.push((result_b / 2. * 255.) as u8);
+            buffer.push(255);
+
+            //let color = Color::linear_rgb(result_r, result_g, result_b);
+            //image.set_color_at(x, y, color).unwrap();
         }
     }
+    //println!("{:#?}", buffer);
+    *image = Image::new(
+        Extent3d {
+            width: image.width(),
+            height: image.height(),
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        buffer,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    )
 }
 
 /// On screen resize respawn the sprite, redraw the image and reset pixel counter
@@ -178,4 +203,10 @@ fn reset_seed(mut seed: ResMut<Seed>) {
 
 fn window_resized(mut resize_reader: EventReader<WindowResized>) -> bool {
     resize_reader.read().last().is_some()
+}
+
+fn make_visible(mut window: Single<&mut Window>, frames: Res<FrameCount>) {
+    if frames.0 == 10 {
+        window.visible = true;
+    }
 }
