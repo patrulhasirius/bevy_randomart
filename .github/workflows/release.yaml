@@ -56,7 +56,7 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           # Upload entire repository
           path: "./wasm"
@@ -65,7 +65,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
       - name: Upload binaries to artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: ${{ env.binary }}.zip
           name: wasm
@@ -115,7 +115,7 @@ jobs:
           zip --recurse-paths ../${{ env.binary }}.zip .
 
       - name: Upload binaries to artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: ${{ env.binary }}.zip
           name: linux
@@ -162,7 +162,7 @@ jobs:
           Compress-Archive -Path windows/* -DestinationPath ${{ env.binary }}.zip
 
       - name: Upload binaries to artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: ${{ env.binary }}.zip
           name: windows
@@ -209,7 +209,7 @@ jobs:
           hdiutil create -fs HFS+ -volname "${{ env.binary }}" -srcfolder ${{ env.binary }}.app ${{ env.binary }}-macOS-intel.dmg
 
       - name: Upload binaries to artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: ${{ env.binary }}-macOS-intel.dmg
           name: macOS-intel
@@ -256,7 +256,7 @@ jobs:
           hdiutil create -fs HFS+ -volname "${{ env.binary }}-macOS-apple-silicon" -srcfolder ${{ env.binary }}.app ${{ env.binary }}-macOS-apple-silicon.dmg
 
       - name: Upload binaries to artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: ${{ env.binary }}-macOS-apple-silicon.dmg
           name: macOS-apple-silicon
@@ -298,7 +298,7 @@ jobs:
 
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: ./builds
 
