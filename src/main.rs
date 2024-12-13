@@ -39,7 +39,6 @@ fn main() {
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         resolution: WindowResolution::new(IMAGE_HEIGHT as f32, IMAGE_WIDTH as f32),
-                        canvas: Some("#canvas".into()),
                         fit_canvas_to_parent: true,
                         //prevent_default_event_handling: false,
                         visible: false,
