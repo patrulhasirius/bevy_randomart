@@ -4,29 +4,25 @@
 // Feel free to delete this line.
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
+mod func_gen;
+
 use bevy::asset::AssetMetaCheck;
 use bevy::color::palettes::css;
-use bevy::math::U64Vec2;
+use bevy::input::common_conditions::input_just_pressed;
 use bevy::prelude::*;
 use bevy::render::{
     render_asset::RenderAssetUsages,
     render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
-use bevy::window::WindowResized;
-use rand::Rng;
+use bevy::window::{WindowResized, WindowResolution};
+use func_gen::*;
+use rand::SeedableRng;
 
-const NANOS_MULTIPLIER: u64 = 100;
 const IMAGE_WIDTH: u32 = 800;
-const IMAGE_HEIGHT: u32 = 600;
+const IMAGE_HEIGHT: u32 = 800;
 
 #[derive(Resource)]
-struct PixelTracker {
-    counter: u64,
-}
-
-impl PixelTracker {
-    pub const ZERO: Self = Self { counter: 0 };
-}
+struct Seed(u64);
 
 fn main() {
     App::new()
@@ -41,23 +37,26 @@ fn main() {
                 })
                 .set(WindowPlugin {
                     primary_window: Some(Window {
+                        resolution: WindowResolution::new(IMAGE_HEIGHT as f32, IMAGE_WIDTH as f32),
                         fit_canvas_to_parent: true,
                         ..default()
                     }),
                     ..default()
                 }),
         )
+        .insert_resource(Seed(rand::random()))
         //.insert_resource(Time::<Fixed>::from_hz(44100.0))
-        .insert_resource(PixelTracker::ZERO)
         .add_systems(Startup, setup)
-        .add_systems(Update, (on_resize_system))
+        .add_systems(Update, on_resize_system.run_if(window_resized))
+        .add_systems(
+            Update,
+            (reset_seed, on_seed_reset)
+                .chain()
+                .run_if(input_just_pressed(KeyCode::KeyR)),
+        )
         //.add_systems(FixedUpdate, draw)
         .run();
 }
-
-/// Store the image handle that we will draw to, here.
-#[derive(Resource)]
-struct MyProcGenImage(Handle<Image>);
 
 /// Generate a black image with the given dimensions
 fn generate_image(width: u32, height: u32) -> Image {
@@ -78,7 +77,8 @@ fn generate_image(width: u32, height: u32) -> Image {
     )
 }
 
-fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, seed: Res<Seed>) {
+    info!("seed: {}", seed.0);
     // spawn a camera
     commands.spawn(Camera2d);
 
@@ -87,84 +87,95 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     // add it to Bevy's assets, so it can be used for rendering
     // this will give us a handle we can use
     // (to display it in a sprite, or as part of UI, etc.)
+
     let handle = images.add(image);
 
     // create a sprite entity using our image
     commands.spawn(Sprite::from_image(handle.clone()));
-    commands.insert_resource(MyProcGenImage(handle));
 }
 
-/// Get a start and end id and randomize the given pixels
-fn random_pixels(start: u64, number: u64, image: &mut Image) {
-    let mut rng = rand::thread_rng();
+fn render_pixels(image: &mut Image, seed: u64) {
+    const MAX_DEPTH: u32 = 50;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
-    for n in start..number {
-        if (n) <= (image.height() * image.width()).into() {
-            // Generate a random color.
-            let draw_color = Color::linear_rgba(rng.gen(), rng.gen(), rng.gen(), rng.gen());
+    let r_tree = generate_tree(MAX_DEPTH, &mut rng);
+    let g_tree = generate_tree(MAX_DEPTH, &mut rng);
+    let b_tree = generate_tree(MAX_DEPTH, &mut rng);
 
-            let xy = U64Vec2::new((n) % image.width() as u64, (n) / image.width() as u64);
-            let (x, y) = (xy.x, xy.y);
+    for y in 0..image.height() {
+        // 0..height => 0..2 => -1..1
+        let ny = (y as f32) / ((image.height() - 1) as f32) * 2. - 1.;
+        for x in 0..image.width() {
+            let nx = (x as f32) / ((image.width() - 1) as f32) * 2. - 1.;
+            let result_r = eval(nx, ny, &r_tree, &mut rng);
+            let result_g = eval(nx, ny, &g_tree, &mut rng);
+            let result_b = eval(nx, ny, &b_tree, &mut rng);
 
-            // Set the new color, but keep old alpha value from image.
-            image
-                .set_color_at(
-                    x as u32, y as u32, draw_color, //.with_alpha(rng.gen_range(0.0..1.0)),
-                ) //.with_alpha(old_color.alpha()))
-                .unwrap();
-
-            //info!("pixel count {}", pixel_tracker.counter);
+            let color = Color::linear_rgb(result_r, result_g, result_b);
+            image.set_color_at(x, y, color).unwrap();
         }
     }
-}
-
-/// Change some pixels based on amount of milis from last draw
-fn draw(
-    my_handle: Res<MyProcGenImage>,
-    mut images: ResMut<Assets<Image>>,
-    // used to keep track of where we are
-    mut pixel_tracker: ResMut<PixelTracker>,
-    time: Res<Time>,
-) {
-    let i = pixel_tracker.counter;
-
-    // Get the image from Bevy's asset storage.
-    let image = images.get_mut(&my_handle.0).expect("Image not found");
-
-    let nanos = time.delta().as_millis();
-
-    random_pixels(i, nanos as u64 * NANOS_MULTIPLIER, image);
-
-    pixel_tracker.counter += (nanos as u64) * NANOS_MULTIPLIER;
 }
 
 /// On screen resize respawn the sprite, redraw the image and reset pixel counter
 fn on_resize_system(
     mut commands: Commands,
-    mut resize_reader: EventReader<WindowResized>,
     query: Query<Entity, With<Sprite>>,
     mut images: ResMut<Assets<Image>>,
-    mut pixel_tracker: ResMut<PixelTracker>,
+    seed: Res<Seed>,
+    windows: Query<&Window>,
 ) {
     let Ok(sprite) = query.get_single() else {
         return;
     };
-    if let Some(e) = resize_reader.read().last() {
-        // When resolution is being changed
-        commands.entity(sprite).despawn_recursive();
-        commands.remove_resource::<MyProcGenImage>();
 
-        let mut image = generate_image(e.width as u32, e.height as u32);
-        random_pixels(
-            pixel_tracker.counter,
-            (image.height() * image.width()) as u64,
-            &mut image,
-        );
+    let window = windows.single();
+    // When resolution is being changed
+    commands.entity(sprite).despawn_recursive();
+    let id = images.ids().last().unwrap();
+    let _ = images.remove_untracked(id).unwrap();
 
-        let handle = images.add(image);
-        commands.spawn(Sprite::from_image(handle.clone()));
-        commands.insert_resource(MyProcGenImage(handle));
+    let mut image = generate_image(
+        window.resolution.width() as u32,
+        window.resolution.height() as u32,
+    );
 
-        *pixel_tracker = PixelTracker::ZERO;
-    }
+    render_pixels(&mut image, seed.0);
+
+    let handle = images.add(image);
+    commands.spawn(Sprite::from_image(handle.clone()));
+}
+
+fn on_seed_reset(
+    mut commands: Commands,
+    query: Query<Entity, With<Sprite>>,
+    mut images: ResMut<Assets<Image>>,
+    seed: Res<Seed>,
+    windows: Query<&Window>,
+) {
+    info!("seed: {}", seed.0);
+    let Ok(sprite) = query.get_single() else {
+        return;
+    };
+    let window = windows.single();
+    let id = images.ids().last().unwrap();
+    let _ = images.remove_untracked(id).unwrap();
+    let mut image = generate_image(
+        window.resolution.width() as u32,
+        window.resolution.height() as u32,
+    );
+    render_pixels(&mut image, seed.0);
+
+    commands.entity(sprite).despawn_recursive();
+
+    let handle = images.add(image);
+    commands.spawn(Sprite::from_image(handle.clone()));
+}
+
+fn reset_seed(mut seed: ResMut<Seed>) {
+    seed.0 = rand::random();
+}
+
+fn window_resized(mut resize_reader: EventReader<WindowResized>) -> bool {
+    resize_reader.read().last().is_some()
 }
