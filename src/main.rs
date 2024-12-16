@@ -2,7 +2,7 @@
 // about code quality. They are sometimes hard to avoid though, and the CI
 // workflow treats them as errors, so this allows them throughout the project.
 // Feel free to delete this line.
-#![allow(clippy::too_many_arguments, clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
 
 mod func_gen;
 
@@ -18,6 +18,7 @@ use bevy::render::{
 use bevy::window::{WindowResized, WindowResolution};
 use func_gen::*;
 use rand::SeedableRng;
+use rayon::prelude::*;
 
 const IMAGE_WIDTH: u32 = 800;
 const IMAGE_HEIGHT: u32 = 800;
@@ -50,7 +51,7 @@ fn main() {
         )
         .insert_resource(Seed(rand::random()))
         //.insert_resource(Time::<Fixed>::from_hz(44100.0))
-        .add_systems(Startup, setup)
+        .add_systems(Startup, (setup, on_seed_reset).chain())
         .add_systems(Update, on_resize_system.run_if(window_resized))
         .add_systems(
             Update,
@@ -77,6 +78,7 @@ fn generate_image(width: u32, height: u32) -> Image {
         // Initialize it with a beige color
         &(css::BLACK.to_u8_array()),
         // Use the same encoding as the color we set
+        //TextureFormat::Rgba8Unorm,
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
     )
@@ -100,33 +102,84 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, seed: Res<Se
 }
 
 fn render_pixels(image: &mut Image, seed: u64) {
-    const MAX_DEPTH: u32 = 50;
+    const MAX_DEPTH: u32 = 15;
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
     let r_tree = generate_tree(MAX_DEPTH, &mut rng);
+    info!("{:?}", r_tree);
     let g_tree = generate_tree(MAX_DEPTH, &mut rng);
+    info!("{:?}", g_tree);
     let b_tree = generate_tree(MAX_DEPTH, &mut rng);
+    info!("{:?}", b_tree);
 
-    let mut buffer: Vec<u8> = Vec::with_capacity((image.height() * image.height()) as usize);
-    for y in 0..image.height() {
-        // 0..height => 0..2 => -1..1
-        let ny = (y as f32) / ((image.height() - 1) as f32) * 2. - 1.;
-        for x in 0..image.width() {
-            let nx = (x as f32) / ((image.width() - 1) as f32) * 2. - 1.;
-            let result_r = eval(nx, ny, &r_tree, &mut rng);
-            let result_g = eval(nx, ny, &g_tree, &mut rng);
-            let result_b = eval(nx, ny, &b_tree, &mut rng);
+    info!("Generated");
 
-            buffer.push((result_r / 2. * 255.) as u8);
-            buffer.push((result_g / 2. * 255.) as u8);
-            buffer.push((result_b / 2. * 255.) as u8);
-            buffer.push(255);
+    //let mut buffer_r: Vec<f32> = Vec::with_capacity((image.height() * image.height()) as usize);
+    //let mut buffer_g: Vec<f32> = Vec::with_capacity((image.height() * image.height()) as usize);
+    //let mut buffer_b: Vec<f32> = Vec::with_capacity((image.height() * image.height()) as usize);
 
-            //let color = Color::linear_rgb(result_r, result_g, result_b);
-            //image.set_color_at(x, y, color).unwrap();
-        }
-    }
-    //println!("{:#?}", buffer);
+    let (width, height) = (image.width(), image.height());
+
+    let zipped: Vec<(f32, f32, f32)> = (0..height)
+        .into_par_iter()
+        .flat_map(|y| {
+            let ny = (y as f32) / (height as f32) * 2. - 1.;
+            (0..width)
+                .map(|x| {
+                    let nx = (x as f32) / (width as f32) * 2. - 1.;
+
+                    let result_r = eval(nx, ny, &r_tree);
+                    let result_g = eval(nx, ny, &g_tree);
+                    let result_b = eval(nx, ny, &b_tree);
+
+                    (result_r, result_g, result_b)
+                })
+                .collect::<Vec<(f32, f32, f32)>>()
+        })
+        .collect();
+
+    let (buffer_r, buffer_g, buffer_b): (Vec<_>, Vec<_>, Vec<_>) = itertools::multiunzip(zipped);
+
+    // let buffer_r_max = buffer_r.iter().max_by(|a, b| a.total_cmp(b)).unwrap();
+    // let buffer_r_min = buffer_r.iter().min_by(|a, b| a.total_cmp(b)).unwrap();
+
+    let buffer_r: Vec<u8> = buffer_r
+        .iter()
+        // this method sounds more correct but looks way worse
+        //.map(|n| ((n + buffer_r_min.abs()) / (buffer_r_max + buffer_r_min.abs()) * 255.) as u8)
+        .map(|n| ((n + 1.) / 2. * 255.) as u8)
+        .collect();
+
+    // let buffer_g_max = buffer_g.iter().max_by(|a, b| a.total_cmp(b)).unwrap();
+    // let buffer_g_min = buffer_g.iter().min_by(|a, b| a.total_cmp(b)).unwrap();
+
+    let buffer_g: Vec<u8> = buffer_g
+        .iter()
+        //.map(|x| ((x + buffer_g_min.abs()) / (buffer_g_max + buffer_g_min.abs()) * 255.) as u8)
+        .map(|n| ((n + 1.) / 2. * 255.) as u8)
+        .collect();
+
+    // let buffer_b_max = buffer_b.iter().max_by(|a, b| a.total_cmp(b)).unwrap();
+    // let buffer_b_min = buffer_b.iter().min_by(|a, b| a.total_cmp(b)).unwrap();
+
+    let buffer_b: Vec<u8> = buffer_b
+        .iter()
+        //.map(|x| ((x + buffer_b_min.abs()) / (buffer_b_max + buffer_b_min.abs()) * 255.) as u8)
+        .map(|n| ((n + 1.) / 2. * 255.) as u8)
+        .collect();
+
+    let buffer_a: Vec<u8> = vec![255; (image.height() * image.width()) as usize];
+
+    let interleaved: Vec<u8> = buffer_r
+        .iter()
+        .zip(buffer_g.iter())
+        .zip(buffer_b.iter())
+        .zip(buffer_a.iter())
+        .flat_map(|(((a, b), c), d)| [a, b, c, d])
+        .cloned()
+        .collect();
+
+    //info!("{:#?}", interleaved);
     *image = Image::new(
         Extent3d {
             width: image.width(),
@@ -134,7 +187,7 @@ fn render_pixels(image: &mut Image, seed: u64) {
             depth_or_array_layers: 1,
         },
         TextureDimension::D2,
-        buffer,
+        interleaved,
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
     )

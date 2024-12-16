@@ -1,46 +1,74 @@
 use rand::{rngs::StdRng, Rng};
 
+#[derive(Debug, Clone)]
 pub struct NodeBinop {
-    lhs: Box<Node>,
-    rhs: Box<Node>,
+    lhs: Box<NodeKind>,
+    rhs: Box<NodeKind>,
 }
 
-pub enum Node {
+enum NodeState {
+    A,
+    C,
+}
+
+#[derive(Debug, Clone)]
+pub enum NodeKind {
     X,
     Y,
-    RANDOM,
-    ADD(NodeBinop),
-    MULT(NodeBinop),
+    Random(f32),
+    Add(NodeBinop),
+    Mult(NodeBinop),
+    //NK_RULE,
+    //NK_BOOLEAN,
+    //NK_ADD,
+    //NK_MULT,
+    //NK_MOD,
+    //NK_GT,
+    //NK_IF,
 }
 
-pub fn eval(x: f32, y: f32, node: &Node, rng: &mut StdRng) -> f32 {
+pub fn eval(x: f32, y: f32, node: &NodeKind) -> f32 {
     match node {
-        Node::X => x,
-        Node::Y => y,
-        Node::RANDOM => rng.gen_range(-1f32..1f32),
-        Node::ADD(node_binop) => {
-            eval(x, y, node_binop.lhs.as_ref(), rng) + eval(x, y, node_binop.rhs.as_ref(), rng)
+        NodeKind::X => x,
+        NodeKind::Y => y,
+        NodeKind::Random(r) => *r,
+        NodeKind::Add(node_binop) => {
+            eval(x, y, node_binop.lhs.as_ref()) + eval(x, y, node_binop.rhs.as_ref())
         }
-        Node::MULT(node_binop) => {
-            eval(x, y, node_binop.lhs.as_ref(), rng) * eval(x, y, node_binop.rhs.as_ref(), rng)
+        NodeKind::Mult(node_binop) => {
+            eval(x, y, node_binop.lhs.as_ref()) * eval(x, y, node_binop.rhs.as_ref())
         }
     }
 }
 
-pub fn generate_tree(depth: u32, rng: &mut StdRng) -> Node {
-    let end = if depth == 0 { 3 } else { 5 };
-    match rng.gen_range(1..=end) {
-        1 => Node::X,
-        2 => Node::Y,
-        3 => Node::RANDOM,
-        4 => Node::ADD(NodeBinop {
-            lhs: Box::new(generate_tree(depth - 1, rng)),
-            rhs: Box::new(generate_tree(depth - 1, rng)),
-        }),
-        5 => Node::MULT(NodeBinop {
-            lhs: Box::new(generate_tree(depth - 1, rng)),
-            rhs: Box::new(generate_tree(depth - 1, rng)),
-        }),
-        _ => panic!("at the disco"),
+pub fn generate_tree(depth: u32, rng: &mut StdRng) -> NodeKind {
+    let state = match depth == 0 {
+        true => NodeState::A,
+        false => {
+            if rng.gen_bool(1f64 / 4f64) {
+                NodeState::A
+            } else {
+                NodeState::C
+            }
+        }
+    };
+    match state {
+        NodeState::A => match rng.gen_range(1..=3) {
+            1 => NodeKind::X,
+            2 => NodeKind::Y,
+            3 => NodeKind::Random(rng.gen_range(-1f32..=1f32)),
+            _ => unreachable!(),
+        },
+        NodeState::C => match rng.gen_range(1..=2) {
+            1 => NodeKind::Add(NodeBinop {
+                lhs: Box::new(generate_tree(depth - 1, rng)),
+                rhs: Box::new(generate_tree(depth - 1, rng)),
+            }),
+            2 => NodeKind::Mult(NodeBinop {
+                lhs: Box::new(generate_tree(depth - 1, rng)),
+                rhs: Box::new(generate_tree(depth - 1, rng)),
+            }),
+            _ => unreachable!(),
+        },
     }
 }
