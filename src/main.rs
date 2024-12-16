@@ -53,7 +53,6 @@ fn main() {
 }
 
 /// Generate a black image with the given dimensions
-
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, seed: Res<Seed>) {
     info!("seed: {}", seed.0);
     // spawn a camera

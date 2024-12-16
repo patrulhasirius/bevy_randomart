@@ -7,7 +7,6 @@ use bevy::{
     window::WindowResized,
 };
 use rand::SeedableRng;
-use rayon::prelude::*;
 
 use crate::{eval, generate_tree, seed::Seed};
 
@@ -65,7 +64,7 @@ pub fn generate_image(width: u32, height: u32) -> Image {
 }
 
 fn render_pixels(image: &mut Image, seed: u64) {
-    const MAX_DEPTH: u32 = 10;
+    const MAX_DEPTH: u32 = 20;
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
     let r_tree = generate_tree(MAX_DEPTH, &mut rng);
@@ -74,8 +73,6 @@ fn render_pixels(image: &mut Image, seed: u64) {
     info!("{:?}", g_tree);
     let b_tree = generate_tree(MAX_DEPTH, &mut rng);
     info!("{:?}", b_tree);
-
-    info!("Generated");
 
     //let mut buffer_r: Vec<f32> = Vec::with_capacity((image.height() * image.height()) as usize);
     //let mut buffer_g: Vec<f32> = Vec::with_capacity((image.height() * image.height()) as usize);

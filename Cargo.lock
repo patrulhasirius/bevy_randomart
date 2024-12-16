@@ -917,7 +917,6 @@ dependencies = [
  "itertools",
  "num_cpus",
  "rand",
- "rayon",
 ]
 
 [[package]]
