@@ -102,7 +102,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, seed: Res<Se
 }
 
 fn render_pixels(image: &mut Image, seed: u64) {
-    const MAX_DEPTH: u32 = 15;
+    const MAX_DEPTH: u32 = 10;
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
     let r_tree = generate_tree(MAX_DEPTH, &mut rng);
