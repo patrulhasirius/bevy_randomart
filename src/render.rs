@@ -8,39 +8,49 @@ use bevy::{
 };
 use rand::SeedableRng;
 
-use crate::{eval, generate_tree, seed::Seed};
+use crate::{eval, generate_tree, seed::Seed, state::RenderState};
 
-pub struct RenderPlugin;
+pub struct CpuRenderPlugin;
 
-impl Plugin for RenderPlugin {
+impl Plugin for CpuRenderPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (render).run_if(should_run));
     }
 }
 
-fn should_run(mut resize_reader: EventReader<WindowResized>, seed: Res<Seed>) -> bool {
-    resize_reader.read().last().is_some() | seed.is_changed()
+fn should_run(
+    mut resize_reader: EventReader<WindowResized>,
+    seed: Res<Seed>,
+    state: Res<State<RenderState>>,
+) -> bool {
+    (resize_reader.read().last().is_some() | seed.is_changed() | state.is_changed())
+        & (*state.get() == RenderState::CpuRender)
 }
 
 fn render(
+    mut commands: Commands,
     mut query: Query<&mut Sprite>,
     mut images: ResMut<Assets<Image>>,
     seed: Res<Seed>,
     windows: Query<&Window>,
+    time: Res<Time>,
 ) {
     let window = windows.single();
 
+    // When resolution is being changed
+    let mut image = generate_image(
+        window.resolution.width() as u32,
+        window.resolution.height() as u32,
+    );
+
+    render_pixels(&mut image, seed.0, time.elapsed_secs());
+
+    // TODO DELETE IMAGES
+    let handle = images.add(image);
     if let Ok(mut sprite) = query.get_single_mut() {
-        // When resolution is being changed
-        let mut image = generate_image(
-            window.resolution.width() as u32,
-            window.resolution.height() as u32,
-        );
-
-        render_pixels(&mut image, seed.0);
-
-        let handle = images.add(image);
         sprite.image = handle.clone()
+    } else {
+        commands.spawn(Sprite::from_image(handle.clone()));
     };
 }
 
@@ -63,22 +73,25 @@ pub fn generate_image(width: u32, height: u32) -> Image {
     )
 }
 
-fn render_pixels(image: &mut Image, seed: u64) {
-    const MAX_DEPTH: u32 = 20;
+fn render_pixels(image: &mut Image, seed: u64, time: f32) {
+    const MAX_DEPTH: u32 = 30;
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
+    info!("{}", seed);
+
     let r_tree = generate_tree(MAX_DEPTH, &mut rng);
-    info!("{:?}", r_tree);
+    // info!("{:?}", r_tree);
     let g_tree = generate_tree(MAX_DEPTH, &mut rng);
-    info!("{:?}", g_tree);
+    // info!("{:?}", g_tree);
     let b_tree = generate_tree(MAX_DEPTH, &mut rng);
-    info!("{:?}", b_tree);
+    // info!("{:?}", b_tree);
 
     //let mut buffer_r: Vec<f32> = Vec::with_capacity((image.height() * image.height()) as usize);
     //let mut buffer_g: Vec<f32> = Vec::with_capacity((image.height() * image.height()) as usize);
     //let mut buffer_b: Vec<f32> = Vec::with_capacity((image.height() * image.height()) as usize);
 
-    let (width, height) = (image.width(), image.height());
+    let width = image.width() as usize;
+    let height = image.height() as usize;
 
     //let zipped: Vec<(f32, f32, f32)> = (0..height)
     //    .into_par_iter()
@@ -99,18 +112,20 @@ fn render_pixels(image: &mut Image, seed: u64) {
     //    .collect();
 
     let result: Vec<u8> = (0..height)
-        .collect::<Vec<u32>>()
+        .collect::<Vec<usize>>()
         .par_splat_map(ComputeTaskPool::get(), None, |_, data| {
-            let mut vec: Vec<f32> = Vec::new();
+            let mut vec: Vec<f32> = vec![0.; data.len() * width * 4];
+            let mut counter: usize = 0;
             data.iter().for_each(|y| {
                 let ny = (*y as f32) / (height as f32) * 2. - 1.;
                 (0..width).for_each(|x| {
                     let nx = (x as f32) / (width as f32) * 2. - 1.;
 
-                    vec.push(eval(nx, ny, &r_tree));
-                    vec.push(eval(nx, ny, &g_tree));
-                    vec.push(eval(nx, ny, &b_tree));
-                    vec.push(1.);
+                    vec[0 + counter] = eval(nx, ny, &r_tree, time);
+                    vec[1 + counter] = eval(nx, ny, &g_tree, time);
+                    vec[2 + counter] = eval(nx, ny, &b_tree, time);
+                    vec[3 + counter] = 1.;
+                    counter += 4;
                 })
             });
             vec

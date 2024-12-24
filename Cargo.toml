@@ -17,6 +17,7 @@ opt-level = 3
 
 [dependencies]
 bevy = { version = "0.15", features = ["wayland"] }
+bevy_simple_text_input = "0.10.0"
 itertools = "0.13.0"
 num_cpus = "1.16.0"
 rand = "0.8.5"
