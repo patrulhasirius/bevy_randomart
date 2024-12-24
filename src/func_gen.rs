@@ -1,4 +1,8 @@
+use std::fmt::{write, Display};
+
 use rand::{rngs::StdRng, Rng};
+
+use crate::state::RenderState;
 
 #[derive(Debug, Clone)]
 pub struct NodeBinop {
@@ -28,29 +32,88 @@ pub enum NodeKind {
     Sin(NodeUnop),
     Mod(NodeBinop),
     Gt(NodeBinop),
+    Time,
 }
 
-pub fn eval(x: f32, y: f32, node: &NodeKind) -> f32 {
+impl Display for NodeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let string = generate_shader_code(self);
+
+        write!(f, "{}", string)
+    }
+}
+
+pub fn generate_shader_code(node: &NodeKind) -> String {
+    match node {
+        NodeKind::X => "mesh.uv.x * 2.0 - 1.0".to_string(),
+        NodeKind::Y => "mesh.uv.y * 2.0 - 1.0".to_string(),
+        NodeKind::Random(r) => format!("f32({})", *r),
+        NodeKind::Add(node_binop) => {
+            format!(
+                "({}) + ({})",
+                generate_shader_code(node_binop.lhs.as_ref()),
+                generate_shader_code(node_binop.rhs.as_ref())
+            )
+        }
+        NodeKind::Mult(node_binop) => {
+            format!(
+                "({}) * ({})",
+                generate_shader_code(node_binop.lhs.as_ref()),
+                generate_shader_code(node_binop.rhs.as_ref())
+            )
+        }
+        NodeKind::Sqrt(node_unop) => {
+            format!(
+                "sqrt(abs({}))",
+                generate_shader_code(node_unop.value.as_ref())
+            )
+        }
+        NodeKind::Abs(node_unop) => {
+            format!("abs({})", generate_shader_code(node_unop.value.as_ref()))
+        }
+        NodeKind::Sin(node_unop) => {
+            format!("sin({})", generate_shader_code(node_unop.value.as_ref()))
+        }
+        NodeKind::Mod(node_binop) => {
+            format!(
+                "({}) % ({})",
+                generate_shader_code(node_binop.lhs.as_ref()),
+                generate_shader_code(node_binop.rhs.as_ref())
+            )
+        }
+        NodeKind::Gt(node_binop) => {
+            format!(
+                "f32(({}) > ({}))",
+                generate_shader_code(node_binop.lhs.as_ref()),
+                generate_shader_code(node_binop.rhs.as_ref())
+            )
+        }
+        NodeKind::Time => format!("sin(globals.time)"),
+    }
+}
+
+pub fn eval(x: f32, y: f32, node: &NodeKind, time: f32) -> f32 {
     match node {
         NodeKind::X => x,
         NodeKind::Y => y,
         NodeKind::Random(r) => *r,
         NodeKind::Add(node_binop) => {
-            eval(x, y, node_binop.lhs.as_ref()) + eval(x, y, node_binop.rhs.as_ref())
+            eval(x, y, node_binop.lhs.as_ref(), time) + eval(x, y, node_binop.rhs.as_ref(), time)
         }
         NodeKind::Mult(node_binop) => {
-            eval(x, y, node_binop.lhs.as_ref()) * eval(x, y, node_binop.rhs.as_ref())
+            eval(x, y, node_binop.lhs.as_ref(), time) * eval(x, y, node_binop.rhs.as_ref(), time)
         }
-        NodeKind::Sqrt(node_unop) => eval(x, y, node_unop.value.as_ref()).sqrt(),
-        NodeKind::Abs(node_unop) => eval(x, y, node_unop.value.as_ref()).abs(),
-        NodeKind::Sin(node_unop) => eval(x, y, node_unop.value.as_ref()).sin(),
+        NodeKind::Sqrt(node_unop) => eval(x, y, node_unop.value.as_ref(), time).abs().sqrt(),
+        NodeKind::Abs(node_unop) => eval(x, y, node_unop.value.as_ref(), time).abs(),
+        NodeKind::Sin(node_unop) => eval(x, y, node_unop.value.as_ref(), time).sin(),
         NodeKind::Mod(node_binop) => {
-            eval(x, y, node_binop.lhs.as_ref()) % eval(x, y, node_binop.rhs.as_ref())
+            eval(x, y, node_binop.lhs.as_ref(), time) % eval(x, y, node_binop.rhs.as_ref(), time)
         }
         NodeKind::Gt(node_binop) => {
-            (eval(x, y, node_binop.lhs.as_ref()) > eval(x, y, node_binop.rhs.as_ref())) as i32
-                as f32
+            (eval(x, y, node_binop.lhs.as_ref(), time) > eval(x, y, node_binop.rhs.as_ref(), time))
+                as i32 as f32
         }
+        NodeKind::Time => time.sin(),
     }
 }
 
@@ -65,11 +128,13 @@ pub fn generate_tree(depth: u32, rng: &mut StdRng) -> NodeKind {
             }
         }
     };
+
     match state {
-        NodeState::A => match rng.gen_range(1..=3) {
+        NodeState::A => match rng.gen_range(1..=4) {
             1 => NodeKind::X,
             2 => NodeKind::Y,
             3 => NodeKind::Random(rng.gen_range(-1f32..=1f32)),
+            4 => NodeKind::Time,
             _ => unreachable!(),
         },
         NodeState::C => match rng.gen_range(1..=7) {

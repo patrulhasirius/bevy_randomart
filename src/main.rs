@@ -5,16 +5,20 @@
 #![allow(clippy::too_many_arguments)]
 
 mod func_gen;
+mod gpu_draw;
 mod render;
 mod seed;
+mod state;
 mod visibility;
 
 use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use func_gen::*;
-use render::{generate_image, RenderPlugin};
+use gpu_draw::GpuRenderPlugin;
+use render::{generate_image, CpuRenderPlugin};
 use seed::{Seed, SeedPlugin};
+use state::StatePlugin;
 use visibility::VisibilityPlugin;
 
 const IMAGE_WIDTH: u32 = 800;
@@ -45,27 +49,17 @@ fn main() {
         )
         //.insert_resource(Time::<Fixed>::from_hz(44100.0))
         .add_systems(Startup, setup)
-        .add_plugins(RenderPlugin)
+        .add_plugins(CpuRenderPlugin)
         .add_plugins(VisibilityPlugin)
         .add_plugins(SeedPlugin)
-        //.add_systems(FixedUpdate, draw)
+        .add_plugins(GpuRenderPlugin)
+        .add_plugins(StatePlugin)
         .run();
 }
 
 /// Generate a black image with the given dimensions
-fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, seed: Res<Seed>) {
+fn setup(mut commands: Commands, seed: Res<Seed>) {
     info!("seed: {}", seed.0);
     // spawn a camera
     commands.spawn(Camera2d);
-
-    let image = generate_image(IMAGE_WIDTH, IMAGE_HEIGHT);
-
-    // add it to Bevy's assets, so it can be used for rendering
-    // this will give us a handle we can use
-    // (to display it in a sprite, or as part of UI, etc.)
-
-    let handle = images.add(image);
-
-    // create a sprite entity using our image
-    commands.spawn(Sprite::from_image(handle.clone()));
 }
